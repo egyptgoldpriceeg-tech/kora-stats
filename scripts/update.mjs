@@ -1,5 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 const FILE = 'data/matches.json';
+const BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/';
+const HEAD = { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', accept: 'application/json', referer: 'https://www.espn.com/' };
 // ترتيب الدوريات حسب الأهمية. أضف سطراً جديداً لإضافة دوري.
 const LEAGUES = [
   { slug: 'uefa.champions', ar: 'دوري أبطال أوروبا', en: 'Champions League', c: 'eu' },
@@ -18,10 +20,10 @@ async function getJSON(url) {
   let err;
   for (let i = 0; i < 3; i++) {
     try {
-      const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', accept: 'application/json', referer: 'https://www.espn.com/' } });
-      if (!r.ok) throw new Error(url + ' -> ' + r.status);
+      const r = await fetch(url, { headers: HEAD });
+      if (!r.ok) { const e = new Error(url + ' -> ' + r.status); e.stop = r.status >= 400 && r.status < 500; throw e; }
       return await r.json();
-    } catch (e) { err = e; if (i < 2) await sleep(5000 * (i + 1)); }
+    } catch (e) { err = e; if (e.stop) break; if (i < 2) await sleep(5000 * (i + 1)); }
   }
   throw err;
 }
@@ -48,16 +50,23 @@ async function main() {
   let db = { updated: null, leagues: [], matches: [] };
   try { db = JSON.parse(await readFile(FILE, 'utf8')); } catch {}
   const now = Date.now();
-  const range = ymd(new Date(now - 86400000)) + '-' + ymd(new Date(now + 86400000));
+  const days = [-1, 0, 1].map((n) => ymd(new Date(now + n * 86400000)));
   let ok = 0;
   for (const L of LEAGUES) {
-    try {
-      const j = await getJSON('https://site.api.espn.com/apis/site/v2/sports/soccer/' + L.slug + '/scoreboard?limit=100&dates=' + range);
-      const list = (j.events || []).map((e) => parse(e, L.slug)).filter(Boolean);
-      db.matches = db.matches.filter((m) => m.league !== L.slug).concat(list);
+    const got = new Map();
+    let good = 0;
+    for (const d of days) {
+      try {
+        const j = await getJSON(BASE + L.slug + '/scoreboard?dates=' + d);
+        good++;
+        for (const e of j.events || []) { const m = parse(e, L.slug); if (m) got.set(m.id, m); }
+      } catch (e) { console.warn('failed', L.slug, d, e.message); }
+    }
+    if (good) {
+      db.matches = db.matches.filter((m) => !got.has(m.id)).concat([...got.values()]);
       ok++;
-      console.log(L.slug, list.length);
-    } catch (e) { console.warn('failed', L.slug, e.message); }
+      console.log(L.slug, got.size);
+    }
   }
   if (!ok) { console.error('all sources failed, keeping old data'); process.exit(1); }
   db.leagues = LEAGUES.map(({ slug, ar, en, c }, i) => ({ slug, ar, en, c, rank: i }));
