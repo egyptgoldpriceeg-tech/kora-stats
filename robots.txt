@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://kora-stats.pages.dev/sitemap.xml
