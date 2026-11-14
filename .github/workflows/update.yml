@@ -1,0 +1,27 @@
+name: update-matches
+on:
+  schedule:
+    - cron: '5 */2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: update-matches
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/update.mjs
+      - run: |
+          git config user.name "kora-bot"
+          git config user.email "kora-bot@users.noreply.github.com"
+          git add data/matches.json
+          git diff --cached --quiet || git commit -m "update matches"
+          git pull --rebase --autostash
+          git push
