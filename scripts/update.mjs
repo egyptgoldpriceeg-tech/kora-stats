@@ -18,7 +18,7 @@ async function getJSON(url) {
   let err;
   for (let i = 0; i < 3; i++) {
     try {
-      const r = await fetch(url, { headers: { 'user-agent': 'kora-stats-bot' } });
+      const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', accept: 'application/json', referer: 'https://www.espn.com/' } });
       if (!r.ok) throw new Error(url + ' -> ' + r.status);
       return await r.json();
     } catch (e) { err = e; if (i < 2) await sleep(5000 * (i + 1)); }
